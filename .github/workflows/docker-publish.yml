@@ -12,6 +12,7 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    environment: packaging
     permissions:
       contents: read
       packages: write
@@ -24,7 +25,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GH_TOKEN }}
 
       - name: Extract Docker metadata
         id: meta
@@ -43,17 +44,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Make image public (optional)
-        if: ${{ secrets.GHCR_ADMIN_TOKEN != '' }}
-        env:
-          GH_TOKEN: ${{ secrets.GHCR_ADMIN_TOKEN }}
-          OWNER: ${{ github.repository_owner }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-        run: |
-          OWNER_TYPE=$(gh api /users/${OWNER} --jq .type)
-          if [ "$OWNER_TYPE" = "Organization" ]; then
-            gh api -X PATCH /orgs/${OWNER}/packages/container/${IMAGE_NAME}/visibility -f visibility=public
-          else
-            gh api -X PATCH /user/packages/container/${IMAGE_NAME}/visibility -f visibility=public
-          fi
