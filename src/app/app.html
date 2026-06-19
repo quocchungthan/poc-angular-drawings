@@ -1,0 +1,200 @@
+<div class="page" (click)="onPageClick($event)">
+  <header class="toolbar" (click)="$event.stopPropagation()">
+    <div class="mode-group">
+      <button
+        type="button"
+        [class.active]="state.mode() === 'readonly'"
+        (click)="setMode('readonly')"
+      >
+        Readonly
+      </button>
+      <button
+        type="button"
+        [class.active]="state.mode() === 'edit'"
+        (click)="setMode('edit')"
+      >
+        Edit
+      </button>
+    </div>
+
+    @if (state.mode() === 'edit') {
+      <div class="mode-group">
+        <button
+          type="button"
+          [class.active]="state.editSubMode() === 'drawing-edit'"
+          (click)="setEditSubMode('drawing-edit')"
+        >
+          Drawing Edit
+        </button>
+        <button
+          type="button"
+          [class.active]="state.editSubMode() === 'waypoint-edit'"
+          (click)="setEditSubMode('waypoint-edit')"
+        >
+          Waypoint Edit
+        </button>
+      </div>
+    }
+
+    @if (state.mode() === 'edit' && state.editSubMode() === 'drawing-edit') {
+      <div class="tool-group">
+        <button
+          type="button"
+          [class.active]="state.drawingTool() === 'select'"
+          (click)="setDrawingTool('select')"
+        >
+          Select
+        </button>
+        <button
+          type="button"
+          [class.active]="state.drawingTool() === 'line'"
+          (click)="setDrawingTool('line')"
+        >
+          Line
+        </button>
+        <button
+          type="button"
+          [class.active]="state.drawingTool() === 'dashed-line'"
+          (click)="setDrawingTool('dashed-line')"
+        >
+          Dashed
+        </button>
+        <button
+          type="button"
+          [class.active]="state.drawingTool() === 'rectangle'"
+          (click)="setDrawingTool('rectangle')"
+        >
+          Rectangle
+        </button>
+        <button
+          type="button"
+          [class.active]="state.drawingTool() === 'triangle'"
+          (click)="setDrawingTool('triangle')"
+        >
+          Triangle
+        </button>
+        <button
+          type="button"
+          [class.active]="state.drawingTool() === 'circle'"
+          (click)="setDrawingTool('circle')"
+        >
+          Circle
+        </button>
+        <button
+          type="button"
+          [class.active]="state.drawingTool() === 'oval'"
+          (click)="setDrawingTool('oval')"
+        >
+          Oval
+        </button>
+      </div>
+    }
+
+    <div class="picture-group">
+      <button type="button" (click)="previousPicture()">Prev</button>
+      <span class="picture-name">{{ state.currentPicture().name }}</span>
+      <button type="button" (click)="nextPicture()">Next</button>
+    </div>
+
+    <div class="persist-group">
+      <button type="button" (click)="undoCurrentPicture()" [disabled]="!canUndoCurrentPicture()">Undo</button>
+      <button type="button" (click)="redoCurrentPicture()" [disabled]="!canRedoCurrentPicture()">Redo</button>
+      <button type="button" (click)="saveCurrentPicture()">Save</button>
+      <button type="button" (click)="resetCurrentPicture()">Reset Current</button>
+      <button type="button" (click)="exportCurrentPictureJson()">Export Current Picture JSON</button>
+      <button type="button" (click)="openImportJsonPicker()">Import JSON</button>
+      <button type="button" [class.active]="showChecklist" (click)="toggleChecklist()">
+        Demo Checklist
+      </button>
+    </div>
+
+    <input
+      #importFileInput
+      type="file"
+      accept="application/json,.json"
+      class="hidden-input"
+      (change)="onImportJsonSelected($event)"
+    />
+  </header>
+
+  <main
+    class="map-shell"
+    (touchstart)="onTouchStart($event)"
+    (touchend)="onTouchEnd($event)"
+  >
+    <div #mapContainer class="map-container" data-testid="map-container"></div>
+
+    <aside class="minimap-overlay" aria-label="Viewport minimap" aria-hidden="true" data-testid="minimap-overlay">
+      <div #minimapContainer class="minimap-container" data-testid="minimap-container"></div>
+      <div class="minimap-mask">
+        <div class="mask-part" [style.left.px]="0" [style.top.px]="0" [style.width.%]="100" [style.height.px]="minimapViewportTop"></div>
+        <div class="mask-part" [style.left.px]="0" [style.top.px]="minimapViewportBottom" [style.width.%]="100" [style.bottom.px]="0"></div>
+        <div class="mask-part" [style.left.px]="0" [style.top.px]="minimapViewportTop" [style.width.px]="minimapViewportLeft" [style.height.px]="minimapViewportHeight"></div>
+        <div class="mask-part" [style.left.px]="minimapViewportRight" [style.top.px]="minimapViewportTop" [style.right.px]="0" [style.height.px]="minimapViewportHeight"></div>
+      </div>
+
+      @if (minimapViewportVisible) {
+        <div
+          class="minimap-viewport"
+          data-testid="minimap-viewport"
+          [style.left.px]="minimapViewportLeft"
+          [style.top.px]="minimapViewportTop"
+          [style.width.px]="minimapViewportWidth"
+          [style.height.px]="minimapViewportHeight"
+        ></div>
+      }
+    </aside>
+
+    @if (contextMenuVisible && contextWaypoint) {
+      <div
+        class="context-menu"
+        data-testid="waypoint-context-menu"
+        [style.left.px]="contextMenuX"
+        [style.top.px]="contextMenuY"
+        (click)="$event.stopPropagation()"
+      >
+        <h3>{{ contextWaypoint.name }}</h3>
+        <button type="button" (click)="onViewWaypointDetail()">View Detail</button>
+        <button type="button" (click)="onOpenWaypointInNewTab()">Open New Tab</button>
+        @if (state.mode() === 'edit' && state.editSubMode() === 'waypoint-edit') {
+          <button type="button" class="danger" (click)="onRemoveWaypoint()">Remove</button>
+        }
+      </div>
+    }
+
+    <div class="hint" data-testid="status-hint">
+      <strong>{{ state.mode() === 'readonly' ? 'Readonly' : 'Edit' }}</strong>
+      <span>{{ statusMessage }}</span>
+      @if (state.mode() === 'readonly') {
+        <span>Swipe left/right to change picture.</span>
+      }
+      @if (state.mode() === 'edit' && state.editSubMode() === 'drawing-edit') {
+        <span>Lines/rectangles/triangles use two clicks. Circle and Oval use click-drag. Select tool to edit.</span>
+      }
+      @if (state.mode() === 'edit' && state.editSubMode() === 'waypoint-edit') {
+        <span>Click to add waypoint. Drag or right-click marker to remove.</span>
+      }
+    </div>
+
+    @if (showChecklist) {
+      <aside class="demo-checklist" (click)="$event.stopPropagation()">
+        <h3>Demo Checklist</h3>
+        <ul>
+          <li>[ ] Readonly: drawings are non-interactive.</li>
+          <li>[ ] Readonly: waypoint click and context menu work.</li>
+          <li>[ ] Drawing-edit: panning disabled and waypoints hidden.</li>
+          <li>[ ] Drawing-edit: select shape, move, resize and rotate.</li>
+          <li>[ ] Drawing-edit: line and triangle vertices can be dragged.</li>
+          <li>[ ] Waypoint-edit: drawing interactions are off.</li>
+          <li>[ ] Waypoint-edit: add, drag and remove waypoint.</li>
+          <li>[ ] Slideshow gesture: swipe left and right in readonly.</li>
+          <li>[ ] Save current picture state then reload app.</li>
+          <li>[ ] Reset current picture returns to seeded state.</li>
+          <li>[ ] Keyboard: Esc, Delete/Backspace and Arrow nudging work in edit modes.</li>
+          <li>[ ] Keyboard: Ctrl+Z undo and Ctrl+Shift+Z/Ctrl+Y redo.</li>
+          <li>[ ] Export/import JSON round-trip keeps drawings and waypoints.</li>
+        </ul>
+      </aside>
+    }
+  </main>
+</div>

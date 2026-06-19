@@ -1,0 +1,7 @@
+services:
+  leaflet-picture-poc:
+    image: ghcr.io/learn-mitec/leaflet-picture-poc:latest
+    container_name: leaflet-picture-poc
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"

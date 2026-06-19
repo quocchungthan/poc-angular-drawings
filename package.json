@@ -1,0 +1,40 @@
+{
+  "name": "leaflet-picture-poc",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed",
+    "up": "docker compose up -d",
+    "up:local": "docker compose -f docker-compose.local.yml up --build -d",
+    "down": "docker compose down"
+  },
+  "private": true,
+  "packageManager": "npm@10.8.2",
+  "dependencies": {
+    "@angular/common": "^21.2.0",
+    "@angular/compiler": "^21.2.0",
+    "@angular/core": "^21.2.0",
+    "@angular/forms": "^21.2.0",
+    "@angular/platform-browser": "^21.2.0",
+    "@angular/router": "^21.2.0",
+    "@types/leaflet": "^1.9.21",
+    "leaflet": "^1.9.4",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@angular/build": "^21.2.16",
+    "@angular/cli": "^21.2.16",
+    "@angular/compiler-cli": "^21.2.0",
+    "jsdom": "^28.0.0",
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8"
+  }
+}

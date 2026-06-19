@@ -1,0 +1,10 @@
+services:
+  leaflet-picture-poc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: leaflet-picture-poc:local
+    container_name: leaflet-picture-poc-local
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
