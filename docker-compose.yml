@@ -1,6 +1,6 @@
 services:
   leaflet-picture-poc:
-    image: ghcr.io/learn-mitec/leaflet-picture-poc:latest
+    image: ghcr.io/quocchungthan/leaflet-picture-poc:latest
     container_name: leaflet-picture-poc
     restart: unless-stopped
     ports:
