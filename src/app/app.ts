@@ -7,7 +7,7 @@ import {
   serializePictureAnnotations,
 } from './annotations-json';
 import { isEditableTarget, resolveKeyboardShortcutAction } from './keyboard-shortcuts';
-import { AppMode, DrawingShape, DrawingTool, EditSubMode, Point, Waypoint } from './poc-types';
+import { AppMode, ArrowDirection, ArrowShape, DrawingShape, DrawingTool, EditSubMode, Point, Waypoint } from './poc-types';
 import { getShapeCenter, moveShape, PocStateService, rotateShape, scaleShape } from './poc-state.service';
 
 @Component({
@@ -67,7 +67,7 @@ export class App implements AfterViewInit, OnDestroy {
   private contextMenuOpenedAt = 0;
 
   private imageLoadToken = 0;
-  private readonly shapeLayers = new Map<string, L.Path>();
+  private readonly shapeLayers = new Map<string, L.Layer>();
   private readonly windowKeydownListener = (event: KeyboardEvent) => this.handleKeyboardShortcut(event);
   private readonly windowResizeListener = () => this.updateMinimapViewport();
   private readonly windowMouseUpListener = () => this.handleMapMouseUp();
@@ -282,6 +282,36 @@ export class App implements AfterViewInit, OnDestroy {
 
   protected toggleChecklist(): void {
     this.showChecklist = !this.showChecklist;
+  }
+
+  protected updateSelectedShapeProperty(property: 'color' | 'thickness', value: string | number): void {
+    if (!this.selectedShapeId) {
+      return;
+    }
+
+    const pictureId = this.state.currentPicture().id;
+    const shape = this.state.findShape(pictureId, this.selectedShapeId);
+    if (!shape) {
+      return;
+    }
+
+    const updatedShape = { ...shape };
+    if (property === 'color' && typeof value === 'string') {
+      updatedShape.color = value;
+    } else if (property === 'thickness' && typeof value === 'number') {
+      updatedShape.strokeWidth = value;
+    }
+
+    this.state.updateShape(pictureId, updatedShape);
+    this.state.savePictureState(pictureId);
+    this.renderLayers();
+  }
+
+  protected onThicknessChanged(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const thickness = parseFloat(input.value);
+    this.state.setSelectedThickness(thickness);
+    this.updateSelectedShapeProperty('thickness', thickness);
   }
 
   protected onTouchStart(event: TouchEvent): void {
@@ -769,7 +799,46 @@ export class App implements AfterViewInit, OnDestroy {
     }
   }
 
-  private createShapeLayer(shape: DrawingShape, interactive: boolean): L.Path {
+  private getArrowHeadPoints(startPoint: Point, endPoint: Point, strokeWidth: number): [number, number][] {
+    const dx = endPoint.x - startPoint.x;
+    const dy = endPoint.y - startPoint.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist === 0) {
+      return [];
+    }
+
+    // Normalize direction
+    const unitX = dx / dist;
+    const unitY = dy / dist;
+
+    // Arrowhead size scales with strokeWidth
+    const arrowHeadSize = Math.max(10, strokeWidth * 3);
+    const arrowHeadBase = arrowHeadSize / 2;
+
+    // Perpendicular direction for arrowhead width
+    const perpX = -unitY;
+    const perpY = unitX;
+
+    // Base of arrowhead is back along the shaft
+    const baseX = endPoint.x - unitX * arrowHeadSize;
+    const baseY = endPoint.y - unitY * arrowHeadSize;
+
+    // Left and right corners of arrowhead base
+    const leftX = baseX + perpX * arrowHeadBase;
+    const leftY = baseY + perpY * arrowHeadBase;
+    const rightX = baseX - perpX * arrowHeadBase;
+    const rightY = baseY - perpY * arrowHeadBase;
+
+    // Return triangle: tip and two base corners
+    return [
+      [endPoint.y, endPoint.x],
+      [leftY, leftX],
+      [rightY, rightX],
+    ];
+  }
+
+  private createShapeLayer(shape: DrawingShape, interactive: boolean): L.Layer {
     const selected = this.selectedShapeId === shape.id;
     const commonStyle = {
       color: selected ? '#0ea5e9' : shape.color,
@@ -777,9 +846,59 @@ export class App implements AfterViewInit, OnDestroy {
       interactive,
     };
 
-    let layer: L.Path;
+    let layer: L.Layer;
+    
+    if (shape.type === 'arrow') {
+      const arrowShape = shape as ArrowShape;
+      
+      // Create shaft (line from start to end)
+      const shaft = L.polyline(
+        [
+          [arrowShape.startPoint.y, arrowShape.startPoint.x],
+          [arrowShape.endPoint.y, arrowShape.endPoint.x],
+        ],
+        {
+          ...commonStyle,
+          lineCap: 'round',
+          lineJoin: 'round',
+        },
+      );
+
+      // Create arrowhead (triangle at the end)
+      const arrowheadPoints = this.getArrowHeadPoints(arrowShape.startPoint, arrowShape.endPoint, arrowShape.strokeWidth);
+      const arrowhead = L.polygon(arrowheadPoints, {
+        ...commonStyle,
+        fill: true,
+        fillColor: commonStyle.color,
+        fillOpacity: 1,
+      });
+
+      // Group them together
+      const group = L.layerGroup([shaft, arrowhead]);
+
+      if (interactive) {
+        shaft.on('mousedown', (event: L.LeafletMouseEvent) => this.startShapeDrag(shape.id, event));
+        shaft.on('click', (event: L.LeafletMouseEvent) => {
+          this.selectShape(shape.id);
+          this.statusMessage = `Selected shape ${shape.id}`;
+          this.renderLayers();
+          L.DomEvent.stopPropagation(event);
+        });
+        arrowhead.on('mousedown', (event: L.LeafletMouseEvent) => this.startShapeDrag(shape.id, event));
+        arrowhead.on('click', (event: L.LeafletMouseEvent) => {
+          this.selectShape(shape.id);
+          this.statusMessage = `Selected shape ${shape.id}`;
+          this.renderLayers();
+          L.DomEvent.stopPropagation(event);
+        });
+      }
+
+      return group;
+    }
+    
+    let pathLayer: L.Path;
     if (shape.type === 'line' || shape.type === 'dashed-line') {
-      layer = L.polyline(
+      pathLayer = L.polyline(
         shape.points.map((point) => [point.y, point.x] as [number, number]),
         {
           ...commonStyle,
@@ -790,14 +909,14 @@ export class App implements AfterViewInit, OnDestroy {
       );
     } else if (shape.type === 'rectangle') {
       const corners = getRectangleCorners(shape).map((point) => [point.y, point.x] as [number, number]);
-      layer = L.polygon(corners, {
+      pathLayer = L.polygon(corners, {
         ...commonStyle,
         fill: true,
         fillColor: commonStyle.color,
         fillOpacity: 0.01,
       });
     } else if (shape.type === 'circle') {
-      layer = L.circle([shape.cy, shape.cx], {
+      pathLayer = L.circle([shape.cy, shape.cx], {
         ...commonStyle,
         radius: shape.radius,
         fill: true,
@@ -805,7 +924,7 @@ export class App implements AfterViewInit, OnDestroy {
         fillOpacity: 0.01,
       });
     } else if (shape.type === 'oval') {
-      layer = L.polygon(
+      pathLayer = L.polygon(
         getOvalOutlinePoints(shape).map((point) => [point.y, point.x] as [number, number]),
         {
           ...commonStyle,
@@ -815,7 +934,7 @@ export class App implements AfterViewInit, OnDestroy {
         },
       );
     } else {
-      layer = L.polygon(
+      pathLayer = L.polygon(
         shape.points.map((point) => [point.y, point.x] as [number, number]),
         {
           ...commonStyle,
@@ -826,10 +945,12 @@ export class App implements AfterViewInit, OnDestroy {
       );
     }
 
+    layer = pathLayer;
+    
     if (interactive) {
       layer.on('mousedown', (event: L.LeafletMouseEvent) => this.startShapeDrag(shape.id, event));
       layer.on('click', (event: L.LeafletMouseEvent) => {
-        this.selectedShapeId = shape.id;
+        this.selectShape(shape.id);
         this.statusMessage = `Selected shape ${shape.id}`;
         this.renderLayers();
         L.DomEvent.stopPropagation(event);
@@ -859,6 +980,11 @@ export class App implements AfterViewInit, OnDestroy {
 
     if (shape.type === 'line' || shape.type === 'dashed-line' || shape.type === 'triangle') {
       this.renderVertexHandles(shape);
+      return;
+    }
+
+    // Arrows don't have transform handles
+    if (shape.type === 'arrow') {
       return;
     }
 
@@ -954,17 +1080,19 @@ export class App implements AfterViewInit, OnDestroy {
           !activeShape ||
           activeShape.type === 'rectangle' ||
           activeShape.type === 'circle' ||
-          activeShape.type === 'oval'
+          activeShape.type === 'oval' ||
+          activeShape.type === 'arrow'
         ) {
           return;
         }
 
+        const pointsShape = activeShape as Extract<DrawingShape, { type: 'line' | 'dashed-line' | 'triangle' }>;
         this.vertexDragState = {
           shapeId: activeShape.id,
           pointIndex,
-          startPoint: { ...activeShape.points[pointIndex] },
-          startShape: activeShape,
-          latestShape: activeShape,
+          startPoint: { ...pointsShape.points[pointIndex] },
+          startShape: pointsShape,
+          latestShape: pointsShape,
           moved: false,
           committed: false,
         };
@@ -1285,8 +1413,8 @@ export class App implements AfterViewInit, OnDestroy {
   }
 
   private buildShapeFromTwoPoints(start: L.LatLng, end: L.LatLng, tool: DrawingTool): DrawingShape {
-    const strokeWidth = 3;
-    const color = '#111111';
+    const strokeWidth = this.state.selectedThickness();
+    const color = this.state.selectedColor();
     const id = `shape-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     if (tool === 'line' || tool === 'dashed-line') {
@@ -1307,7 +1435,7 @@ export class App implements AfterViewInit, OnDestroy {
         id,
         type: 'rectangle',
         strokeWidth,
-        color: '#b91c1c',
+        color,
         x: Math.min(start.lng, end.lng),
         y: Math.min(start.lat, end.lat),
         width: Math.abs(end.lng - start.lng),
@@ -1321,7 +1449,7 @@ export class App implements AfterViewInit, OnDestroy {
         id,
         type: 'circle',
         strokeWidth,
-        color: '#047857',
+        color,
         cx: start.lng,
         cy: start.lat,
         radius: Math.max(2, distance({ x: start.lng, y: start.lat }, { x: end.lng, y: end.lat })),
@@ -1333,12 +1461,24 @@ export class App implements AfterViewInit, OnDestroy {
         id,
         type: 'oval',
         strokeWidth,
-        color: '#7c3aed',
+        color,
         x: Math.min(start.lng, end.lng),
         y: Math.min(start.lat, end.lat),
         width: Math.max(2, Math.abs(end.lng - start.lng)),
         height: Math.max(2, Math.abs(end.lat - start.lat)),
         rotationDeg: 0,
+      };
+    }
+
+    if (tool === 'arrow') {
+      return {
+        id,
+        type: 'arrow',
+        strokeWidth,
+        color,
+        startPoint: { x: start.lng, y: start.lat },
+        endPoint: { x: end.lng, y: end.lat },
+        direction: this.state.arrowDirection(),
       };
     }
 
@@ -1350,9 +1490,26 @@ export class App implements AfterViewInit, OnDestroy {
       id,
       type: 'triangle',
       strokeWidth,
-      color: '#1d4ed8',
+      color,
       points: [topPoint, rightPoint, leftPoint],
     };
+  }
+
+  private selectShape(shapeId: string): void {
+    const pictureId = this.state.currentPicture().id;
+    const shape = this.state.findShape(pictureId, shapeId);
+    if (!shape) {
+      return;
+    }
+
+    this.selectedShapeId = shapeId;
+    // Update UI controls with the selected shape's properties
+    this.state.setSelectedColor(shape.color);
+    this.state.setSelectedThickness(shape.strokeWidth);
+    if (shape.type === 'arrow') {
+      const arrowShape = shape as ArrowShape;
+      this.state.setArrowDirection(arrowShape.direction);
+    }
   }
 
   private startShapeDrag(shapeId: string, event: L.LeafletMouseEvent): void {
@@ -1816,7 +1973,16 @@ function getRotateHandlePoint(shape: DrawingShape, center: Point): Point {
     };
   }
 
-  const maxDistance = Math.max(...shape.points.map((point) => distance(center, point)));
+  if (shape.type === 'arrow' || shape.type === 'line' || shape.type === 'dashed-line') {
+    const pointShape = shape as any;
+    const maxDistance = Math.max(...pointShape.points.map((point: Point) => distance(center, point)));
+    return {
+      x: center.x,
+      y: center.y - maxDistance - 48,
+    };
+  }
+
+  const maxDistance = Math.max(...(shape as any).points.map((point: Point) => distance(center, point)));
   return {
     x: center.x,
     y: center.y - maxDistance - 48,

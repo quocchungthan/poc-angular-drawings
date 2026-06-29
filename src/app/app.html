@@ -87,6 +87,74 @@
         >
           Oval
         </button>
+        <button
+          type="button"
+          [class.active]="state.drawingTool() === 'arrow'"
+          (click)="setDrawingTool('arrow')"
+        >
+          Arrow
+        </button>
+      </div>
+
+      <div class="properties-group">
+        <label>
+          Stroke Color:
+          <input
+            type="color"
+            [value]="state.selectedColor()"
+            (input)="state.setSelectedColor($event.target.value); updateSelectedShapeProperty('color', $event.target.value)"
+          />
+        </label>
+        <label>
+          Stroke Width:
+          <input
+            type="range"
+            min="2"
+            max="6"
+            step="0.5"
+            [value]="state.selectedThickness()"
+            (input)="onThicknessChanged($event)"
+          />
+          <span class="thickness-value">{{ state.selectedThickness() }}px</span>
+        </label>
+
+        @if (state.drawingTool() === 'arrow') {
+          <div class="arrow-direction-group">
+            <label>Arrow Direction:</label>
+            <button
+              type="button"
+              [class.active]="state.arrowDirection() === 'up'"
+              title="Up"
+              (click)="state.setArrowDirection('up')"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              [class.active]="state.arrowDirection() === 'down'"
+              title="Down"
+              (click)="state.setArrowDirection('down')"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              [class.active]="state.arrowDirection() === 'left'"
+              title="Left"
+              (click)="state.setArrowDirection('left')"
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              [class.active]="state.arrowDirection() === 'right'"
+              title="Right"
+              (click)="state.setArrowDirection('right')"
+            >
+              →
+            </button>
+          </div>
+        }
       </div>
     }
 

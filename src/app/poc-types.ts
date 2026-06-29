@@ -2,7 +2,9 @@ export type AppMode = 'readonly' | 'edit';
 
 export type EditSubMode = 'drawing-edit' | 'waypoint-edit';
 
-export type DrawingTool = 'select' | 'line' | 'dashed-line' | 'rectangle' | 'triangle' | 'circle' | 'oval';
+export type DrawingTool = 'select' | 'line' | 'dashed-line' | 'rectangle' | 'triangle' | 'circle' | 'oval' | 'arrow';
+
+export type ArrowDirection = 'up' | 'down' | 'left' | 'right';
 
 export interface PictureItem {
   id: string;
@@ -17,7 +19,7 @@ export interface Point {
 
 interface ShapeBase {
   id: string;
-  type: 'line' | 'dashed-line' | 'rectangle' | 'triangle' | 'circle' | 'oval';
+  type: 'line' | 'dashed-line' | 'rectangle' | 'triangle' | 'circle' | 'oval' | 'arrow';
   color: string;
   strokeWidth: number;
 }
@@ -57,7 +59,14 @@ export interface OvalShape extends ShapeBase {
   rotationDeg?: number;
 }
 
-export type DrawingShape = LineShape | RectangleShape | TriangleShape | CircleShape | OvalShape;
+export interface ArrowShape extends ShapeBase {
+  type: 'arrow';
+  startPoint: Point;
+  endPoint: Point;
+  direction: ArrowDirection;
+}
+
+export type DrawingShape = LineShape | RectangleShape | TriangleShape | CircleShape | OvalShape | ArrowShape;
 
 export interface Waypoint {
   id: string;

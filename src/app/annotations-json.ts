@@ -273,8 +273,12 @@ function cloneShape(shape: DrawingShape): DrawingShape {
     return { ...shape };
   }
 
+  if (shape.type === 'arrow') {
+    return { ...shape };
+  }
+
   return {
     ...shape,
-    points: shape.points.map((point) => ({ ...point })),
+    points: shape.points.map((point: Point) => ({ ...point })),
   } as DrawingShape;
 }

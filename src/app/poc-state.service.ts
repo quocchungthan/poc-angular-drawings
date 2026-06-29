@@ -1,6 +1,8 @@
 import { computed, Injectable, signal } from '@angular/core';
 import {
   AppMode,
+  ArrowDirection,
+  ArrowShape,
   DrawingShape,
   DrawingTool,
   EditSubMode,
@@ -39,6 +41,9 @@ export class PocStateService {
   readonly editSubMode = signal<EditSubMode>('drawing-edit');
   readonly drawingTool = signal<DrawingTool>('select');
   readonly pictureIndex = signal(0);
+  readonly selectedColor = signal<string>('#111111');
+  readonly selectedThickness = signal<number>(2);
+  readonly arrowDirection = signal<ArrowDirection>('right');
 
   private readonly defaultDrawingsByPicture: Record<string, DrawingShape[]> = {
     'pic-1': this.parseKonvaDrawingJson(SAMPLE_KONVA_DRAWING_JSON),
@@ -125,6 +130,18 @@ export class PocStateService {
 
   setDrawingTool(tool: DrawingTool): void {
     this.drawingTool.set(tool);
+  }
+
+  setSelectedColor(color: string): void {
+    this.selectedColor.set(color);
+  }
+
+  setSelectedThickness(thickness: number): void {
+    this.selectedThickness.set(thickness);
+  }
+
+  setArrowDirection(direction: ArrowDirection): void {
+    this.arrowDirection.set(direction);
   }
 
   nextPicture(): void {
@@ -517,6 +534,15 @@ export function moveShape(shape: DrawingShape, dx: number, dy: number): DrawingS
     };
   }
 
+  if (shape.type === 'arrow') {
+    const arrowShape = shape as ArrowShape;
+    return {
+      ...shape,
+      startPoint: { x: arrowShape.startPoint.x + dx, y: arrowShape.startPoint.y + dy },
+      endPoint: { x: arrowShape.endPoint.x + dx, y: arrowShape.endPoint.y + dy },
+    };
+  }
+
   if (shape.type === 'rectangle') {
     return {
       ...shape,
@@ -577,6 +603,14 @@ export function getShapeCenter(shape: DrawingShape): Point {
     };
   }
 
+  if (shape.type === 'arrow') {
+    const arrowShape = shape as ArrowShape;
+    return {
+      x: (arrowShape.startPoint.x + arrowShape.endPoint.x) / 2,
+      y: (arrowShape.startPoint.y + arrowShape.endPoint.y) / 2,
+    };
+  }
+
   const points = shape.points;
   const sum = points.reduce(
     (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
@@ -613,6 +647,21 @@ export function scaleShape(shape: DrawingShape, scale: number, origin?: Point): 
     };
   }
 
+  if (shape.type === 'arrow') {
+    const arrowShape = shape as ArrowShape;
+    return {
+      ...shape,
+      startPoint: {
+        x: center.x + (arrowShape.startPoint.x - center.x) * safeScale,
+        y: center.y + (arrowShape.startPoint.y - center.y) * safeScale,
+      },
+      endPoint: {
+        x: center.x + (arrowShape.endPoint.x - center.x) * safeScale,
+        y: center.y + (arrowShape.endPoint.y - center.y) * safeScale,
+      },
+    };
+  }
+
   return {
     ...shape,
     points: shape.points.map((point) => ({
@@ -636,6 +685,15 @@ export function rotateShape(shape: DrawingShape, deltaDeg: number, origin?: Poin
     return shape;
   }
 
+  if (shape.type === 'arrow') {
+    const arrowShape = shape as ArrowShape;
+    return {
+      ...shape,
+      startPoint: rotatePoint(arrowShape.startPoint, center, deltaDeg),
+      endPoint: rotatePoint(arrowShape.endPoint, center, deltaDeg),
+    };
+  }
+
   return {
     ...shape,
     points: shape.points.map((point) => rotatePoint(point, center, deltaDeg)),
@@ -649,9 +707,15 @@ function cloneShape(shape: DrawingShape): DrawingShape {
     };
   }
 
+  if (shape.type === 'arrow') {
+    return {
+      ...shape,
+    };
+  }
+
   return {
     ...shape,
-    points: shape.points.map((point) => ({ ...point })),
+    points: shape.points.map((point: Point) => ({ ...point })),
   } as DrawingShape;
 }
 
