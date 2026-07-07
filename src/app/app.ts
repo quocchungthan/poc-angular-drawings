@@ -48,6 +48,7 @@ export class App implements AfterViewInit, OnDestroy {
   private imageOverlay?: L.ImageOverlay;
   private minimapImageOverlay?: L.ImageOverlay;
   private minimapImageBounds?: L.LatLngBounds;
+  private currentImageSize?: { width: number; height: number };
   private drawingLayer = L.layerGroup();
   private waypointLayer = L.layerGroup();
   private editHandleLayer = L.layerGroup();
@@ -259,7 +260,7 @@ export class App implements AfterViewInit, OnDestroy {
       return;
     }
 
-    const parsed = parsePictureAnnotationsJson(rawContent, picture.id);
+    const parsed = parsePictureAnnotationsJson(rawContent, picture.id, this.currentImageSize);
     if (!parsed.ok) {
       this.statusMessage = parsed.error;
       return;
@@ -481,6 +482,7 @@ export class App implements AfterViewInit, OnDestroy {
       return;
     }
 
+    this.currentImageSize = size;
     const bounds = L.latLngBounds(L.latLng(0, 0), L.latLng(size.height, size.width));
 
     if (this.imageOverlay) {

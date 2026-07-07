@@ -34,7 +34,11 @@ export function serializePictureAnnotations(
   return JSON.stringify(createPictureAnnotationsJson(pictureId, state, now), null, 2);
 }
 
-export function parsePictureAnnotationsJson(raw: string, expectedPictureId: string): ParseAnnotationsResult {
+export function parsePictureAnnotationsJson(
+  raw: string,
+  expectedPictureId: string,
+  imageSize?: { width: number; height: number },
+): ParseAnnotationsResult {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw) as unknown;
@@ -53,7 +57,7 @@ export function parsePictureAnnotationsJson(raw: string, expectedPictureId: stri
     return { ok: true, payload: parsed, skippedObjects: 0 };
   }
 
-  const konvaResult = parseKonvaLineLikeImport(parsed, expectedPictureId);
+  const konvaResult = parseKonvaLineLikeImport(parsed, expectedPictureId, imageSize);
   if (konvaResult) {
     return konvaResult;
   }
@@ -92,13 +96,22 @@ function isPictureAnnotationsJson(value: unknown): value is PictureAnnotationsJs
 function parseKonvaLineLikeImport(
   value: unknown,
   pictureId: string,
+  imageSize?: { width: number; height: number },
 ): Extract<ParseAnnotationsResult, { ok: true }> | null {
   if (!isRecord(value) || !Array.isArray(value['objects'])) {
     return null;
   }
 
+  const canvasWidth = typeof value['width'] === 'number' ? value['width'] : 0;
   const canvasHeight = typeof value['height'] === 'number' ? value['height'] : 0;
-  const flipY = (y: number): number => (canvasHeight > 0 ? canvasHeight - y : y);
+
+  // Scale from canvas pixel space to image pixel space
+  const scaleX = imageSize && canvasWidth > 0 ? imageSize.width / canvasWidth : 1;
+  const scaleY = imageSize && canvasHeight > 0 ? imageSize.height / canvasHeight : 1;
+
+  // Konva y=0 is top-left; Leaflet lat=0 is bottom-left. Flip y then scale.
+  const applyX = (x: number): number => x * scaleX;
+  const applyY = (y: number): number => canvasHeight > 0 ? (canvasHeight - y) * scaleY : y * scaleY;
 
   const objects = value['objects'];
   const shapes: DrawingShape[] = [];
@@ -124,11 +137,11 @@ function parseKonvaLineLikeImport(
         continue;
       }
 
-      const flippedPoints = points.map((p) => ({ x: p.x, y: flipY(p.y) }));
+      const mappedPoints = points.map((p) => ({ x: applyX(p.x), y: applyY(p.y) }));
 
       if (className === 'Arrow') {
-        const startPt = flippedPoints[0];
-        const endPt = flippedPoints[flippedPoints.length - 1];
+        const startPt = mappedPoints[0];
+        const endPt = mappedPoints[mappedPoints.length - 1];
         shapes.push({
           id: shapeId,
           type: 'arrow',
@@ -145,7 +158,7 @@ function parseKonvaLineLikeImport(
           type: dash && dash.length > 0 ? 'dashed-line' : 'line',
           color: stroke,
           strokeWidth,
-          points: flippedPoints,
+          points: mappedPoints,
         });
       }
       continue;
@@ -168,18 +181,17 @@ function parseKonvaLineLikeImport(
       const absH = Math.abs(rh);
       const leftX = rw < 0 ? rx + rw : rx;
       const konvaTopY = rh < 0 ? ry + rh : ry;
-      // app y = minimum lat = bottom of rect in Leaflet = canvasH - (konvaTop + absH)
-      const appY = flipY(konvaTopY + absH);
+      // app y (min lat) = bottom of rect in Leaflet = applyY(konvaTop + absH)
       const rotationDeg = typeof attrs['angle'] === 'number' ? attrs['angle'] : 0;
       shapes.push({
         id: shapeId,
         type: 'rectangle',
         color: stroke,
         strokeWidth,
-        x: leftX,
-        y: appY,
-        width: absW,
-        height: absH,
+        x: applyX(leftX),
+        y: applyY(konvaTopY + absH),
+        width: absW * scaleX,
+        height: absH * scaleY,
         rotationDeg,
       });
       continue;
@@ -199,17 +211,17 @@ function parseKonvaLineLikeImport(
         continue;
       }
       // Fabric Ellipse with originX="left", originY="top": (x,y) is top-left corner
-      const appY = flipY(ey + 2 * radiusY);
+      // app y (min lat) = applyY(konvaTop + 2*radiusY)
       const rotationDeg = typeof attrs['angle'] === 'number' ? attrs['angle'] : 0;
       shapes.push({
         id: shapeId,
         type: 'oval',
         color: stroke,
         strokeWidth,
-        x: ex,
-        y: appY,
-        width: 2 * radiusX,
-        height: 2 * radiusY,
+        x: applyX(ex),
+        y: applyY(ey + 2 * radiusY),
+        width: 2 * radiusX * scaleX,
+        height: 2 * radiusY * scaleY,
         rotationDeg,
       });
       continue;
@@ -227,16 +239,52 @@ function parseKonvaLineLikeImport(
         skippedObjects += 1;
         continue;
       }
-      // Fabric Circle with originX="left", originY="top": (x,y) is top-left corner, center = (x+r, y+r)
-      const konvaCenterY = cy + radius;
+      // Fabric Circle with originX="left", originY="top": center = (x+r, y+r)
       shapes.push({
         id: shapeId,
         type: 'circle',
         color: stroke,
         strokeWidth,
-        cx: cx + radius,
-        cy: flipY(konvaCenterY),
-        radius,
+        cx: applyX(cx + radius),
+        cy: applyY(cy + radius),
+        radius: radius * Math.min(scaleX, scaleY),
+      });
+      continue;
+    }
+
+    if (className === 'RegularPolygon') {
+      if (!attrs) {
+        skippedObjects += 1;
+        continue;
+      }
+      const sides = typeof attrs['sides'] === 'number' ? attrs['sides'] : 0;
+      const pcx = typeof attrs['x'] === 'number' ? attrs['x'] : null;
+      const pcy = typeof attrs['y'] === 'number' ? attrs['y'] : null;
+      const pr = typeof attrs['radius'] === 'number' ? attrs['radius'] : null;
+      if (sides !== 3 || pcx === null || pcy === null || pr === null) {
+        skippedObjects += 1;
+        continue;
+      }
+      // Konva RegularPolygon: first vertex points up at angle -π/2, then clockwise
+      const rotDeg = typeof attrs['rotation'] === 'number' ? attrs['rotation'] : 0;
+      const startAngle = -Math.PI / 2 + (rotDeg * Math.PI / 180);
+      const vertices = [0, 1, 2].map((i) => {
+        const a = startAngle + (i * 2 * Math.PI) / 3;
+        return {
+          x: applyX(pcx + pr * Math.cos(a)),
+          y: applyY(pcy + pr * Math.sin(a)),
+        };
+      });
+      // Sort by lat descending: highest lat = visual top (apex)
+      const sorted = [...vertices].sort((a, b) => b.y - a.y);
+      const apex = sorted[0];
+      const baseTwo = sorted.slice(1).sort((a, b) => b.x - a.x); // right then left
+      shapes.push({
+        id: shapeId,
+        type: 'triangle',
+        color: stroke,
+        strokeWidth,
+        points: [apex, baseTwo[0], baseTwo[1]],
       });
       continue;
     }
@@ -310,6 +358,14 @@ function isDrawingShape(value: unknown): value is DrawingShape {
       typeof value['width'] === 'number' &&
       typeof value['height'] === 'number' &&
       hasRotation
+    );
+  }
+
+  if (value['type'] === 'arrow') {
+    return (
+      isPoint(value['startPoint']) &&
+      isPoint(value['endPoint']) &&
+      typeof value['direction'] === 'string'
     );
   }
 
