@@ -97,6 +97,9 @@ function parseKonvaLineLikeImport(
     return null;
   }
 
+  const canvasHeight = typeof value['height'] === 'number' ? value['height'] : 0;
+  const flipY = (y: number): number => (canvasHeight > 0 ? canvasHeight - y : y);
+
   const objects = value['objects'];
   const shapes: DrawingShape[] = [];
   let skippedObjects = 0;
@@ -109,29 +112,136 @@ function parseKonvaLineLikeImport(
     }
 
     const className = typeof parsedObject['className'] === 'string' ? parsedObject['className'] : '';
-    if (className !== 'Line' && className !== 'Arrow') {
-      skippedObjects += 1;
-      continue;
-    }
-
     const attrs = isRecord(parsedObject['attrs']) ? parsedObject['attrs'] : null;
-    const points = attrs ? toPointPairs(attrs['points']) : null;
-    if (!points || points.length < 2) {
-      skippedObjects += 1;
-      continue;
-    }
-
     const stroke = attrs && typeof attrs['stroke'] === 'string' ? attrs['stroke'] : '#111111';
     const strokeWidth = attrs && typeof attrs['strokeWidth'] === 'number' ? attrs['strokeWidth'] : 3;
-    const dash = attrs && Array.isArray(attrs['dash']) ? attrs['dash'] : undefined;
+    const shapeId = `shape-import-${shapes.length + 1}`;
 
-    shapes.push({
-      id: `shape-import-${shapes.length + 1}`,
-      type: dash && dash.length > 0 ? 'dashed-line' : 'line',
-      color: stroke,
-      strokeWidth,
-      points,
-    });
+    if (className === 'Line' || className === 'Arrow') {
+      const points = attrs ? toPointPairs(attrs['points']) : null;
+      if (!points || points.length < 2) {
+        skippedObjects += 1;
+        continue;
+      }
+
+      const flippedPoints = points.map((p) => ({ x: p.x, y: flipY(p.y) }));
+
+      if (className === 'Arrow') {
+        const startPt = flippedPoints[0];
+        const endPt = flippedPoints[flippedPoints.length - 1];
+        shapes.push({
+          id: shapeId,
+          type: 'arrow',
+          color: stroke,
+          strokeWidth,
+          startPoint: startPt,
+          endPoint: endPt,
+          direction: 'right',
+        });
+      } else {
+        const dash = Array.isArray(attrs?.['dash']) ? (attrs?.['dash'] as unknown[]) : undefined;
+        shapes.push({
+          id: shapeId,
+          type: dash && dash.length > 0 ? 'dashed-line' : 'line',
+          color: stroke,
+          strokeWidth,
+          points: flippedPoints,
+        });
+      }
+      continue;
+    }
+
+    if (className === 'Rect') {
+      if (!attrs) {
+        skippedObjects += 1;
+        continue;
+      }
+      const rx = typeof attrs['x'] === 'number' ? attrs['x'] : null;
+      const ry = typeof attrs['y'] === 'number' ? attrs['y'] : null;
+      const rw = typeof attrs['width'] === 'number' ? attrs['width'] : null;
+      const rh = typeof attrs['height'] === 'number' ? attrs['height'] : null;
+      if (rx === null || ry === null || rw === null || rh === null) {
+        skippedObjects += 1;
+        continue;
+      }
+      const absW = Math.abs(rw);
+      const absH = Math.abs(rh);
+      const leftX = rw < 0 ? rx + rw : rx;
+      const konvaTopY = rh < 0 ? ry + rh : ry;
+      // app y = minimum lat = bottom of rect in Leaflet = canvasH - (konvaTop + absH)
+      const appY = flipY(konvaTopY + absH);
+      const rotationDeg = typeof attrs['angle'] === 'number' ? attrs['angle'] : 0;
+      shapes.push({
+        id: shapeId,
+        type: 'rectangle',
+        color: stroke,
+        strokeWidth,
+        x: leftX,
+        y: appY,
+        width: absW,
+        height: absH,
+        rotationDeg,
+      });
+      continue;
+    }
+
+    if (className === 'Ellipse') {
+      if (!attrs) {
+        skippedObjects += 1;
+        continue;
+      }
+      const ex = typeof attrs['x'] === 'number' ? attrs['x'] : null;
+      const ey = typeof attrs['y'] === 'number' ? attrs['y'] : null;
+      const radiusX = typeof attrs['radiusX'] === 'number' ? attrs['radiusX'] : null;
+      const radiusY = typeof attrs['radiusY'] === 'number' ? attrs['radiusY'] : null;
+      if (ex === null || ey === null || radiusX === null || radiusY === null) {
+        skippedObjects += 1;
+        continue;
+      }
+      // Fabric Ellipse with originX="left", originY="top": (x,y) is top-left corner
+      const appY = flipY(ey + 2 * radiusY);
+      const rotationDeg = typeof attrs['angle'] === 'number' ? attrs['angle'] : 0;
+      shapes.push({
+        id: shapeId,
+        type: 'oval',
+        color: stroke,
+        strokeWidth,
+        x: ex,
+        y: appY,
+        width: 2 * radiusX,
+        height: 2 * radiusY,
+        rotationDeg,
+      });
+      continue;
+    }
+
+    if (className === 'Circle') {
+      if (!attrs) {
+        skippedObjects += 1;
+        continue;
+      }
+      const cx = typeof attrs['x'] === 'number' ? attrs['x'] : null;
+      const cy = typeof attrs['y'] === 'number' ? attrs['y'] : null;
+      const radius = typeof attrs['radius'] === 'number' ? attrs['radius'] : null;
+      if (cx === null || cy === null || radius === null || radius <= 0) {
+        skippedObjects += 1;
+        continue;
+      }
+      // Fabric Circle with originX="left", originY="top": (x,y) is top-left corner, center = (x+r, y+r)
+      const konvaCenterY = cy + radius;
+      shapes.push({
+        id: shapeId,
+        type: 'circle',
+        color: stroke,
+        strokeWidth,
+        cx: cx + radius,
+        cy: flipY(konvaCenterY),
+        radius,
+      });
+      continue;
+    }
+
+    skippedObjects += 1;
   }
 
   if (shapes.length === 0) {

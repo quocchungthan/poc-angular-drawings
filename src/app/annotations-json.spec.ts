@@ -167,8 +167,33 @@ describe('annotations-json', () => {
     }
 
     expect(parsed.payload.pictureId).toBe(pictureId);
-    expect(parsed.payload.shapes.length).toBe(2);
     expect(parsed.payload.waypoints.length).toBe(0);
-    expect(parsed.skippedObjects).toBe(1);
+    expect(parsed.skippedObjects).toBe(0);
+    expect(parsed.payload.shapes.length).toBe(3);
+
+    // Line: points y-flipped with canvasHeight=800
+    const line = parsed.payload.shapes[0];
+    expect(line.type).toBe('line');
+    if (line.type === 'line') {
+      expect(line.points).toEqual([{ x: 10, y: 780 }, { x: 30, y: 760 }]);
+    }
+
+    // Arrow: converted to arrow shape, start/end taken from first/last point, y-flipped
+    const arrow = parsed.payload.shapes[1];
+    expect(arrow.type).toBe('arrow');
+    if (arrow.type === 'arrow') {
+      expect(arrow.startPoint).toEqual({ x: 100, y: 600 });
+      expect(arrow.endPoint).toEqual({ x: 160, y: 540 });
+    }
+
+    // Rect: converted to rectangle, y-flipped (appY = canvasH - (konvaTop + height))
+    const rect = parsed.payload.shapes[2];
+    expect(rect.type).toBe('rectangle');
+    if (rect.type === 'rectangle') {
+      expect(rect.x).toBe(12);
+      expect(rect.y).toBe(736); // 800 - (24 + 40)
+      expect(rect.width).toBe(60);
+      expect(rect.height).toBe(40);
+    }
   });
 });

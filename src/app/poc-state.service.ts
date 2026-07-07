@@ -35,6 +35,11 @@ export class PocStateService {
       name: 'Sample Picture 2',
       url: 'assets/pictures/picture-2.jpg',
     },
+    {
+      id: 'pic-3',
+      name: 'Sample Picture 3',
+      url: 'assets/pictures/picture-3.jpg',
+    },
   ];
 
   readonly mode = signal<AppMode>('readonly');

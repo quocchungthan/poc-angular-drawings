@@ -575,13 +575,15 @@ export class App implements AfterViewInit, OnDestroy {
     const viewNorth = Math.min(clampedBounds.getNorth(), clampedBounds.getSouth());
     const viewSouth = Math.max(clampedBounds.getNorth(), clampedBounds.getSouth());
 
+    // In Leaflet CRS.Simple, high lat = visual top of image. Map lat to minimap DOM y by inverting:
+    // DOM y=0 (top) corresponds to imageSouth (max lat), DOM y=height (bottom) to imageNorth (min lat).
     const viewportNorthWest = {
       x: ((viewWest - imageWest) / imageWidth) * minimapSize.x,
-      y: ((viewNorth - imageNorth) / imageHeight) * minimapSize.y,
+      y: ((imageSouth - viewSouth) / imageHeight) * minimapSize.y,
     };
     const viewportSouthEast = {
       x: ((viewEast - imageWest) / imageWidth) * minimapSize.x,
-      y: ((viewSouth - imageNorth) / imageHeight) * minimapSize.y,
+      y: ((imageSouth - viewNorth) / imageHeight) * minimapSize.y,
     };
 
     const rect = computeMinimapViewportRect(
