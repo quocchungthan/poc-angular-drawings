@@ -210,18 +210,33 @@ function parseKonvaLineLikeImport(
         skippedObjects += 1;
         continue;
       }
-      // Fabric Ellipse with originX="left", originY="top": (x,y) is top-left corner
-      // app y (min lat) = applyY(konvaTop + 2*radiusY)
-      const rotationDeg = typeof attrs['angle'] === 'number' ? attrs['angle'] : 0;
+      const nodeScaleX = typeof attrs['scaleX'] === 'number' ? attrs['scaleX'] : 1;
+      const nodeScaleY = typeof attrs['scaleY'] === 'number' ? attrs['scaleY'] : 1;
+      const width = 2 * Math.abs(radiusX * nodeScaleX);
+      const height = 2 * Math.abs(radiusY * nodeScaleY);
+      if (width <= 0 || height <= 0) {
+        skippedObjects += 1;
+        continue;
+      }
+
+      // Konva Ellipse uses center coordinates for x/y.
+      const leftX = ex - width / 2;
+      const konvaTopY = ey - height / 2;
+      const rotationDeg =
+        typeof attrs['rotation'] === 'number'
+          ? attrs['rotation']
+          : typeof attrs['angle'] === 'number'
+            ? attrs['angle']
+            : 0;
       shapes.push({
         id: shapeId,
         type: 'oval',
         color: stroke,
         strokeWidth,
-        x: applyX(ex),
-        y: applyY(ey + 2 * radiusY),
-        width: 2 * radiusX * scaleX,
-        height: 2 * radiusY * scaleY,
+        x: applyX(leftX),
+        y: applyY(konvaTopY + height),
+        width: width * scaleX,
+        height: height * scaleY,
         rotationDeg,
       });
       continue;

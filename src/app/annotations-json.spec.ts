@@ -196,4 +196,93 @@ describe('annotations-json', () => {
       expect(rect.height).toBe(40);
     }
   });
+
+  it('imports Konva ellipse using center coordinates and node scale', () => {
+    const pictureId = 'pic-1';
+    const konvaPayload = {
+      width: 1000,
+      height: 500,
+      objects: [
+        {
+          className: 'Ellipse',
+          attrs: {
+            x: 100,
+            y: 50,
+            radiusX: 10,
+            radiusY: 20,
+            scaleX: 1.5,
+            scaleY: 0.5,
+            stroke: '#a16207',
+            strokeWidth: 3,
+            strokeScaleEnabled: false,
+            rotation: 15,
+          },
+        },
+      ],
+      version: 'konva_2.4.8',
+    };
+
+    const parsed = parsePictureAnnotationsJson(
+      JSON.stringify(konvaPayload),
+      pictureId,
+      { width: 2000, height: 1000 },
+    );
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      return;
+    }
+
+    expect(parsed.skippedObjects).toBe(0);
+    expect(parsed.payload.shapes.length).toBe(1);
+    const oval = parsed.payload.shapes[0];
+    expect(oval.type).toBe('oval');
+    if (oval.type === 'oval') {
+      // Effective konva size is 2*radius scaled by node scale.
+      expect(oval.x).toBeCloseTo(170, 6);
+      expect(oval.y).toBeCloseTo(880, 6);
+      expect(oval.width).toBeCloseTo(60, 6);
+      expect(oval.height).toBeCloseTo(40, 6);
+      expect(oval.rotationDeg).toBe(15);
+    }
+  });
+
+  it('imports Konva ellipse without scale attributes as unscaled radii', () => {
+    const pictureId = 'pic-1';
+    const konvaPayload = {
+      width: 100,
+      height: 100,
+      objects: [
+        {
+          className: 'Ellipse',
+          attrs: {
+            x: 40,
+            y: 30,
+            radiusX: 10,
+            radiusY: 5,
+            stroke: '#111111',
+            strokeWidth: 2,
+          },
+        },
+      ],
+      version: 'konva_2.4.8',
+    };
+
+    const parsed = parsePictureAnnotationsJson(JSON.stringify(konvaPayload), pictureId);
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      return;
+    }
+
+    const oval = parsed.payload.shapes[0];
+    expect(oval.type).toBe('oval');
+    if (oval.type === 'oval') {
+      expect(oval.x).toBe(30);
+      expect(oval.y).toBe(65);
+      expect(oval.width).toBe(20);
+      expect(oval.height).toBe(10);
+      expect(oval.rotationDeg).toBe(0);
+    }
+  });
 });
