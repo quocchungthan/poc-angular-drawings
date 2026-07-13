@@ -22,11 +22,14 @@ interface ShapeBase {
   type: 'line' | 'dashed-line' | 'rectangle' | 'triangle' | 'circle' | 'oval' | 'arrow';
   color: string;
   strokeWidth: number;
+  strokeLineCap?: 'butt' | 'round' | 'square';
+  strokeLineJoin?: 'miter' | 'round' | 'bevel';
 }
 
 export interface LineShape extends ShapeBase {
   type: 'line' | 'dashed-line';
   points: Point[];
+  dashPattern?: number[];
 }
 
 export interface RectangleShape extends ShapeBase {
@@ -64,6 +67,8 @@ export interface ArrowShape extends ShapeBase {
   startPoint: Point;
   endPoint: Point;
   direction: ArrowDirection;
+  pointerLength?: number;
+  pointerWidth?: number;
 }
 
 export type DrawingShape = LineShape | RectangleShape | TriangleShape | CircleShape | OvalShape | ArrowShape;

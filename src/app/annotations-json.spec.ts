@@ -135,6 +135,9 @@ describe('annotations-json', () => {
           attrs: {
             stroke: '#00aa00',
             strokeWidth: 2,
+            lineCap: 'butt',
+            lineJoin: 'bevel',
+            dash: [6, 3],
             points: [10, 20, 30, 40],
           },
         }),
@@ -173,9 +176,12 @@ describe('annotations-json', () => {
 
     // Line: points y-flipped with canvasHeight=800
     const line = parsed.payload.shapes[0];
-    expect(line.type).toBe('line');
-    if (line.type === 'line') {
+    expect(line.type).toBe('dashed-line');
+    if (line.type === 'dashed-line') {
       expect(line.points).toEqual([{ x: 10, y: 780 }, { x: 30, y: 760 }]);
+      expect(line.strokeLineCap).toBe('butt');
+      expect(line.strokeLineJoin).toBe('bevel');
+      expect(line.dashPattern).toEqual([6, 3]);
     }
 
     // Arrow: converted to arrow shape, start/end taken from first/last point, y-flipped
@@ -218,6 +224,19 @@ describe('annotations-json', () => {
             rotation: 15,
           },
         },
+        {
+          className: 'Circle',
+          attrs: {
+            x: 200,
+            y: 60,
+            radius: 10,
+            scaleX: 1.2,
+            scaleY: 0.8,
+            stroke: '#a16207',
+            strokeWidth: 2,
+            strokeScaleEnabled: false,
+          },
+        },
       ],
       version: 'konva_2.4.8',
     };
@@ -234,7 +253,7 @@ describe('annotations-json', () => {
     }
 
     expect(parsed.skippedObjects).toBe(0);
-    expect(parsed.payload.shapes.length).toBe(1);
+    expect(parsed.payload.shapes.length).toBe(2);
     const oval = parsed.payload.shapes[0];
     expect(oval.type).toBe('oval');
     if (oval.type === 'oval') {
@@ -243,7 +262,21 @@ describe('annotations-json', () => {
       expect(oval.y).toBeCloseTo(880, 6);
       expect(oval.width).toBeCloseTo(60, 6);
       expect(oval.height).toBeCloseTo(40, 6);
-      expect(oval.rotationDeg).toBe(15);
+      // Y-axis conversion in importer flips rotation orientation.
+      expect(oval.rotationDeg).toBe(-15);
+      // strokeWidth scales with image/canvas ratio (2x in this test).
+      expect(oval.strokeWidth).toBeCloseTo(6, 6);
+    }
+
+    const circle = parsed.payload.shapes[1];
+    expect(circle.type).toBe('circle');
+    if (circle.type === 'circle') {
+      // Konva circle x/y are center coordinates.
+      expect(circle.cx).toBeCloseTo(400, 6);
+      expect(circle.cy).toBeCloseTo(880, 6);
+      expect(circle.radius).toBeCloseTo(20, 6);
+      // strokeWidth scales with image/canvas ratio (2x in this test).
+      expect(circle.strokeWidth).toBeCloseTo(4, 6);
     }
   });
 
@@ -283,6 +316,7 @@ describe('annotations-json', () => {
       expect(oval.width).toBe(20);
       expect(oval.height).toBe(10);
       expect(oval.rotationDeg).toBe(0);
+      expect(oval.strokeWidth).toBe(2);
     }
   });
 });

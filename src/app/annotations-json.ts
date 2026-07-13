@@ -108,6 +108,8 @@ function parseKonvaLineLikeImport(
   // Scale from canvas pixel space to image pixel space
   const scaleX = imageSize && canvasWidth > 0 ? imageSize.width / canvasWidth : 1;
   const scaleY = imageSize && canvasHeight > 0 ? imageSize.height / canvasHeight : 1;
+  // Use average axis scale so stroke thickness remains visually close after non-uniform image scaling.
+  const strokeScale = Math.max(0.0001, (Math.abs(scaleX) + Math.abs(scaleY)) / 2);
 
   // Konva y=0 is top-left; Leaflet lat=0 is bottom-left. Flip y then scale.
   const applyX = (x: number): number => x * scaleX;
@@ -127,7 +129,10 @@ function parseKonvaLineLikeImport(
     const className = typeof parsedObject['className'] === 'string' ? parsedObject['className'] : '';
     const attrs = isRecord(parsedObject['attrs']) ? parsedObject['attrs'] : null;
     const stroke = attrs && typeof attrs['stroke'] === 'string' ? attrs['stroke'] : '#111111';
-    const strokeWidth = attrs && typeof attrs['strokeWidth'] === 'number' ? attrs['strokeWidth'] : 3;
+    const strokeWidthRaw = attrs && typeof attrs['strokeWidth'] === 'number' ? attrs['strokeWidth'] : 3;
+    const strokeWidth = strokeWidthRaw * strokeScale;
+    const strokeLineCap = normalizeLineCap(attrs?.['lineCap']);
+    const strokeLineJoin = normalizeLineJoin(attrs?.['lineJoin']);
     const shapeId = `shape-import-${shapes.length + 1}`;
 
     if (className === 'Line' || className === 'Arrow') {
@@ -142,22 +147,31 @@ function parseKonvaLineLikeImport(
       if (className === 'Arrow') {
         const startPt = mappedPoints[0];
         const endPt = mappedPoints[mappedPoints.length - 1];
+        const pointerLength = typeof attrs?.['pointerLength'] === 'number' ? attrs['pointerLength'] : undefined;
+        const pointerWidth = typeof attrs?.['pointerWidth'] === 'number' ? attrs['pointerWidth'] : undefined;
         shapes.push({
           id: shapeId,
           type: 'arrow',
           color: stroke,
           strokeWidth,
+          strokeLineCap,
+          strokeLineJoin,
           startPoint: startPt,
           endPoint: endPt,
           direction: 'right',
+          pointerLength,
+          pointerWidth,
         });
       } else {
-        const dash = Array.isArray(attrs?.['dash']) ? (attrs?.['dash'] as unknown[]) : undefined;
+        const dashPattern = toNumericArray(attrs?.['dash']);
         shapes.push({
           id: shapeId,
-          type: dash && dash.length > 0 ? 'dashed-line' : 'line',
+          type: dashPattern && dashPattern.length > 0 ? 'dashed-line' : 'line',
           color: stroke,
           strokeWidth,
+          strokeLineCap,
+          strokeLineJoin,
+          dashPattern,
           points: mappedPoints,
         });
       }
@@ -182,12 +196,21 @@ function parseKonvaLineLikeImport(
       const leftX = rw < 0 ? rx + rw : rx;
       const konvaTopY = rh < 0 ? ry + rh : ry;
       // app y (min lat) = bottom of rect in Leaflet = applyY(konvaTop + absH)
-      const rotationDeg = typeof attrs['angle'] === 'number' ? attrs['angle'] : 0;
+      const rotationRaw =
+        typeof attrs['rotation'] === 'number'
+          ? attrs['rotation']
+          : typeof attrs['angle'] === 'number'
+            ? attrs['angle']
+            : 0;
+      // Y-axis flip (canvas top-down -> map bottom-up) reverses rotation orientation.
+      const rotationDeg = -rotationRaw;
       shapes.push({
         id: shapeId,
         type: 'rectangle',
         color: stroke,
         strokeWidth,
+        strokeLineCap,
+        strokeLineJoin,
         x: applyX(leftX),
         y: applyY(konvaTopY + absH),
         width: absW * scaleX,
@@ -222,17 +245,21 @@ function parseKonvaLineLikeImport(
       // Konva Ellipse uses center coordinates for x/y.
       const leftX = ex - width / 2;
       const konvaTopY = ey - height / 2;
-      const rotationDeg =
+      const rotationRaw =
         typeof attrs['rotation'] === 'number'
           ? attrs['rotation']
           : typeof attrs['angle'] === 'number'
             ? attrs['angle']
             : 0;
+      // Y-axis flip (canvas top-down -> map bottom-up) reverses rotation orientation.
+      const rotationDeg = -rotationRaw;
       shapes.push({
         id: shapeId,
         type: 'oval',
         color: stroke,
         strokeWidth,
+        strokeLineCap,
+        strokeLineJoin,
         x: applyX(leftX),
         y: applyY(konvaTopY + height),
         width: width * scaleX,
@@ -254,15 +281,20 @@ function parseKonvaLineLikeImport(
         skippedObjects += 1;
         continue;
       }
-      // Fabric Circle with originX="left", originY="top": center = (x+r, y+r)
+      // Konva Circle uses center coordinates for x/y.
+      const nodeScaleX = typeof attrs['scaleX'] === 'number' ? attrs['scaleX'] : 1;
+      const nodeScaleY = typeof attrs['scaleY'] === 'number' ? attrs['scaleY'] : 1;
+      const avgScale = Math.max(0.0001, (Math.abs(nodeScaleX) + Math.abs(nodeScaleY)) / 2);
       shapes.push({
         id: shapeId,
         type: 'circle',
         color: stroke,
         strokeWidth,
-        cx: applyX(cx + radius),
-        cy: applyY(cy + radius),
-        radius: radius * Math.min(scaleX, scaleY),
+        strokeLineCap,
+        strokeLineJoin,
+        cx: applyX(cx),
+        cy: applyY(cy),
+        radius: radius * avgScale * Math.min(scaleX, scaleY),
       });
       continue;
     }
@@ -299,6 +331,8 @@ function parseKonvaLineLikeImport(
         type: 'triangle',
         color: stroke,
         strokeWidth,
+        strokeLineCap,
+        strokeLineJoin,
         points: [apex, baseTwo[0], baseTwo[1]],
       });
       continue;
@@ -447,6 +481,29 @@ function toPointPairs(value: unknown): Point[] | null {
   }
 
   return points;
+}
+
+function toNumericArray(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const numeric = value.filter((item): item is number => typeof item === 'number');
+  return numeric.length > 0 ? numeric : undefined;
+}
+
+function normalizeLineCap(value: unknown): 'butt' | 'round' | 'square' | undefined {
+  if (value === 'butt' || value === 'round' || value === 'square') {
+    return value;
+  }
+  return undefined;
+}
+
+function normalizeLineJoin(value: unknown): 'miter' | 'round' | 'bevel' | undefined {
+  if (value === 'miter' || value === 'round' || value === 'bevel') {
+    return value;
+  }
+  return undefined;
 }
 
 function cloneShape(shape: DrawingShape): DrawingShape {

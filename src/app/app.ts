@@ -803,40 +803,32 @@ export class App implements AfterViewInit, OnDestroy {
     }
   }
 
-  private getArrowHeadPoints(startPoint: Point, endPoint: Point, strokeWidth: number): [number, number][] {
-    const dx = endPoint.x - startPoint.x;
-    const dy = endPoint.y - startPoint.y;
+  private getArrowHeadPointsWithKonvaSemantics(arrowShape: ArrowShape): [number, number][] {
+    const dx = arrowShape.endPoint.x - arrowShape.startPoint.x;
+    const dy = arrowShape.endPoint.y - arrowShape.startPoint.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    
+
     if (dist === 0) {
       return [];
     }
 
-    // Normalize direction
     const unitX = dx / dist;
     const unitY = dy / dist;
+    const pointerLength = Math.max(4, arrowShape.pointerLength ?? arrowShape.strokeWidth * 4);
+    const pointerWidth = Math.max(4, arrowShape.pointerWidth ?? arrowShape.strokeWidth * 4);
+    const halfWidth = pointerWidth / 2;
 
-    // Arrowhead size scales with strokeWidth
-    const arrowHeadSize = Math.max(10, strokeWidth * 3);
-    const arrowHeadBase = arrowHeadSize / 2;
-
-    // Perpendicular direction for arrowhead width
     const perpX = -unitY;
     const perpY = unitX;
+    const baseX = arrowShape.endPoint.x - unitX * pointerLength;
+    const baseY = arrowShape.endPoint.y - unitY * pointerLength;
+    const leftX = baseX + perpX * halfWidth;
+    const leftY = baseY + perpY * halfWidth;
+    const rightX = baseX - perpX * halfWidth;
+    const rightY = baseY - perpY * halfWidth;
 
-    // Base of arrowhead is back along the shaft
-    const baseX = endPoint.x - unitX * arrowHeadSize;
-    const baseY = endPoint.y - unitY * arrowHeadSize;
-
-    // Left and right corners of arrowhead base
-    const leftX = baseX + perpX * arrowHeadBase;
-    const leftY = baseY + perpY * arrowHeadBase;
-    const rightX = baseX - perpX * arrowHeadBase;
-    const rightY = baseY - perpY * arrowHeadBase;
-
-    // Return triangle: tip and two base corners
     return [
-      [endPoint.y, endPoint.x],
+      [arrowShape.endPoint.y, arrowShape.endPoint.x],
       [leftY, leftX],
       [rightY, rightX],
     ];
@@ -848,6 +840,10 @@ export class App implements AfterViewInit, OnDestroy {
       color: selected ? '#0ea5e9' : shape.color,
       weight: selected ? shape.strokeWidth + 1 : shape.strokeWidth,
       interactive,
+      lineCap: shape.strokeLineCap ?? 'round',
+      lineJoin: shape.strokeLineJoin ?? 'round',
+      smoothFactor: 0,
+      noClip: true,
     };
 
     let layer: L.Layer;
@@ -861,15 +857,11 @@ export class App implements AfterViewInit, OnDestroy {
           [arrowShape.startPoint.y, arrowShape.startPoint.x],
           [arrowShape.endPoint.y, arrowShape.endPoint.x],
         ],
-        {
-          ...commonStyle,
-          lineCap: 'round',
-          lineJoin: 'round',
-        },
+        commonStyle,
       );
 
       // Create arrowhead (triangle at the end)
-      const arrowheadPoints = this.getArrowHeadPoints(arrowShape.startPoint, arrowShape.endPoint, arrowShape.strokeWidth);
+      const arrowheadPoints = this.getArrowHeadPointsWithKonvaSemantics(arrowShape);
       const arrowhead = L.polygon(arrowheadPoints, {
         ...commonStyle,
         fill: true,
@@ -906,9 +898,9 @@ export class App implements AfterViewInit, OnDestroy {
         shape.points.map((point) => [point.y, point.x] as [number, number]),
         {
           ...commonStyle,
-          dashArray: shape.type === 'dashed-line' ? '8 8' : undefined,
-          lineCap: 'round',
-          lineJoin: 'round',
+          dashArray: shape.type === 'dashed-line'
+            ? (shape.dashPattern && shape.dashPattern.length > 0 ? shape.dashPattern.join(' ') : '8 8')
+            : undefined,
         },
       );
     } else if (shape.type === 'rectangle') {
@@ -2055,7 +2047,7 @@ function getResizeHandlePoint(shape: Extract<DrawingShape, { type: 'rectangle' |
   };
 }
 
-function getOvalOutlinePoints(shape: Extract<DrawingShape, { type: 'oval' }>, segments = 40): Point[] {
+function getOvalOutlinePoints(shape: Extract<DrawingShape, { type: 'oval' }>, segments = 96): Point[] {
   const center = getShapeCenter(shape);
   const rx = shape.width / 2;
   const ry = shape.height / 2;
