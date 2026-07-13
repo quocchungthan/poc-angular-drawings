@@ -312,14 +312,31 @@ function parseKonvaLineLikeImport(
         skippedObjects += 1;
         continue;
       }
-      // Konva RegularPolygon: first vertex points up at angle -π/2, then clockwise
-      const rotDeg = typeof attrs['rotation'] === 'number' ? attrs['rotation'] : 0;
-      const startAngle = -Math.PI / 2 + (rotDeg * Math.PI / 180);
+      const nodeScaleX = typeof attrs['scaleX'] === 'number' ? attrs['scaleX'] : 1;
+      const nodeScaleY = typeof attrs['scaleY'] === 'number' ? attrs['scaleY'] : 1;
+      const rotDeg =
+        typeof attrs['rotation'] === 'number'
+          ? attrs['rotation']
+          : typeof attrs['angle'] === 'number'
+            ? attrs['angle']
+            : 0;
+      const rotRad = (rotDeg * Math.PI) / 180;
+      const cosRot = Math.cos(rotRad);
+      const sinRot = Math.sin(rotRad);
+      // Konva RegularPolygon local vertices: first points up at angle -π/2, then clockwise.
+      // Transform order is scale -> rotate -> translate.
+      const startAngle = -Math.PI / 2;
       const vertices = [0, 1, 2].map((i) => {
         const a = startAngle + (i * 2 * Math.PI) / 3;
+        const localX = pr * Math.cos(a);
+        const localY = pr * Math.sin(a);
+        const scaledX = localX * nodeScaleX;
+        const scaledY = localY * nodeScaleY;
+        const transformedX = scaledX * cosRot - scaledY * sinRot;
+        const transformedY = scaledX * sinRot + scaledY * cosRot;
         return {
-          x: applyX(pcx + pr * Math.cos(a)),
-          y: applyY(pcy + pr * Math.sin(a)),
+          x: applyX(pcx + transformedX),
+          y: applyY(pcy + transformedY),
         };
       });
       // Sort by lat descending: highest lat = visual top (apex)

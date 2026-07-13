@@ -26,6 +26,11 @@ const LOCAL_STORAGE_KEY = 'leaflet-picture-poc.state.v1';
 export class PocStateService {
   readonly pictures: PictureItem[] = [
     {
+      id: 'pic-4',
+      name: 'Sample Picture 4',
+      url: 'assets/pictures/picture-4.jpg',
+    },
+    {
       id: 'pic-1',
       name: 'Sample Picture 1',
       url: 'assets/pictures/picture-1.jpg',

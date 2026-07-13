@@ -319,4 +319,50 @@ describe('annotations-json', () => {
       expect(oval.strokeWidth).toBe(2);
     }
   });
+
+  it('imports Konva triangle (RegularPolygon sides=3) with non-uniform scale and rotation', () => {
+    const pictureId = 'pic-1';
+    const konvaPayload = {
+      width: 100,
+      height: 100,
+      objects: [
+        {
+          className: 'RegularPolygon',
+          attrs: {
+            sides: 3,
+            x: 50,
+            y: 60,
+            radius: 20,
+            scaleX: 2,
+            scaleY: 0.5,
+            rotation: 90,
+            stroke: '#9333ea',
+            strokeWidth: 4,
+          },
+        },
+      ],
+      version: 'konva_2.4.8',
+    };
+
+    const parsed = parsePictureAnnotationsJson(JSON.stringify(konvaPayload), pictureId);
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      return;
+    }
+
+    expect(parsed.skippedObjects).toBe(0);
+    expect(parsed.payload.shapes.length).toBe(1);
+    const triangle = parsed.payload.shapes[0];
+    expect(triangle.type).toBe('triangle');
+    if (triangle.type === 'triangle') {
+      // After scale->rotate transform and y-axis conversion, apex is the highest-lat vertex.
+      expect(triangle.points[0].x).toBeCloseTo(58.660254, 6);
+      expect(triangle.points[0].y).toBeCloseTo(120, 6);
+      expect(triangle.points[1].x).toBeCloseTo(60, 6);
+      expect(triangle.points[1].y).toBeCloseTo(65.3589838, 6);
+      expect(triangle.points[2].x).toBeCloseTo(40, 6);
+      expect(triangle.points[2].y).toBeCloseTo(74.0192379, 6);
+    }
+  });
 });
