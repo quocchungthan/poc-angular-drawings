@@ -1,5 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { App, computeMinimapViewportRect, shouldCommitDragUpdate } from './app';
+import { App } from './app';
+import { computeMinimapViewportRect } from './minimap.utils';
+import { shouldCommitDragUpdate } from './drag.utils';
 
 describe('App', () => {
   beforeEach(async () => {

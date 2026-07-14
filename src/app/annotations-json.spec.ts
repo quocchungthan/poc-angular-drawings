@@ -182,6 +182,7 @@ describe('annotations-json', () => {
       expect(line.strokeLineCap).toBe('butt');
       expect(line.strokeLineJoin).toBe('bevel');
       expect(line.dashPattern).toEqual([6, 3]);
+      expect(line.strokeWidth).toBe(2);
     }
 
     // Arrow: converted to arrow shape, start/end taken from first/last point, y-flipped
@@ -190,6 +191,7 @@ describe('annotations-json', () => {
     if (arrow.type === 'arrow') {
       expect(arrow.startPoint).toEqual({ x: 100, y: 600 });
       expect(arrow.endPoint).toEqual({ x: 160, y: 540 });
+      expect(arrow.strokeWidth).toBe(4);
     }
 
     // Rect: converted to rectangle, y-flipped (appY = canvasH - (konvaTop + height))
@@ -200,6 +202,120 @@ describe('annotations-json', () => {
       expect(rect.y).toBe(736); // 800 - (24 + 40)
       expect(rect.width).toBe(60);
       expect(rect.height).toBe(40);
+      expect(rect.rotationDeg).toBeCloseTo(0, 6);
+    }
+  });
+
+  it('imports Konva line and arrow with scaled stroke width, caps, joins and pointer attributes', () => {
+    const pictureId = 'pic-1';
+    const konvaPayload = {
+      width: 100,
+      height: 50,
+      objects: [
+        {
+          className: 'Line',
+          attrs: {
+            stroke: '#22c55e',
+            strokeWidth: 2,
+            lineCap: 'round',
+            lineJoin: 'miter',
+            points: [10, 5, 30, 10],
+            dash: [4, 2, 'x'],
+          },
+        },
+        {
+          className: 'Arrow',
+          attrs: {
+            stroke: '#ef4444',
+            strokeWidth: 3,
+            lineCap: 'square',
+            lineJoin: 'round',
+            points: [20, 10, 70, 25, 90, 30],
+            pointerLength: 9,
+            pointerWidth: 7,
+          },
+        },
+      ],
+      version: 'konva_2.4.8',
+    };
+
+    const parsed = parsePictureAnnotationsJson(
+      JSON.stringify(konvaPayload),
+      pictureId,
+      { width: 200, height: 200 },
+    );
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      return;
+    }
+
+    const line = parsed.payload.shapes[0];
+    expect(line.type).toBe('dashed-line');
+    if (line.type === 'dashed-line') {
+      // stroke scale = (2 + 4) / 2 = 3
+      expect(line.strokeWidth).toBeCloseTo(6, 6);
+      expect(line.strokeLineCap).toBe('round');
+      expect(line.strokeLineJoin).toBe('miter');
+      expect(line.dashPattern).toEqual([4, 2]);
+      expect(line.points).toEqual([{ x: 20, y: 180 }, { x: 60, y: 160 }]);
+    }
+
+    const arrow = parsed.payload.shapes[1];
+    expect(arrow.type).toBe('arrow');
+    if (arrow.type === 'arrow') {
+      expect(arrow.strokeWidth).toBeCloseTo(9, 6);
+      expect(arrow.strokeLineCap).toBe('square');
+      expect(arrow.strokeLineJoin).toBe('round');
+      expect(arrow.startPoint).toEqual({ x: 40, y: 160 });
+      expect(arrow.endPoint).toEqual({ x: 180, y: 80 });
+      expect(arrow.pointerLength).toBe(9);
+      expect(arrow.pointerWidth).toBe(7);
+    }
+  });
+
+  it('imports Konva rect with negative size and flips rotation sign after y-axis conversion', () => {
+    const pictureId = 'pic-1';
+    const konvaPayload = {
+      width: 200,
+      height: 100,
+      objects: [
+        {
+          className: 'Rect',
+          attrs: {
+            x: 120,
+            y: 40,
+            width: -30,
+            height: -10,
+            rotation: 30,
+            stroke: '#1d4ed8',
+            strokeWidth: 2,
+          },
+        },
+      ],
+      version: 'konva_2.4.8',
+    };
+
+    const parsed = parsePictureAnnotationsJson(
+      JSON.stringify(konvaPayload),
+      pictureId,
+      { width: 400, height: 200 },
+    );
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      return;
+    }
+
+    const rect = parsed.payload.shapes[0];
+    expect(rect.type).toBe('rectangle');
+    if (rect.type === 'rectangle') {
+      expect(rect.x).toBeCloseTo(180, 6);
+      expect(rect.y).toBeCloseTo(120, 6);
+      expect(rect.width).toBeCloseTo(60, 6);
+      expect(rect.height).toBeCloseTo(20, 6);
+      expect(rect.rotationDeg).toBe(-30);
+      expect(rect.strokeWidth).toBeCloseTo(4, 6);
     }
   });
 
@@ -280,6 +396,49 @@ describe('annotations-json', () => {
     }
   });
 
+  it('imports Konva circle with negative scale values using absolute average node scale', () => {
+    const pictureId = 'pic-1';
+    const konvaPayload = {
+      width: 50,
+      height: 50,
+      objects: [
+        {
+          className: 'Circle',
+          attrs: {
+            x: 25,
+            y: 10,
+            radius: 8,
+            scaleX: -2,
+            scaleY: -0.5,
+            stroke: '#0f766e',
+            strokeWidth: 1,
+          },
+        },
+      ],
+      version: 'konva_2.4.8',
+    };
+
+    const parsed = parsePictureAnnotationsJson(
+      JSON.stringify(konvaPayload),
+      pictureId,
+      { width: 100, height: 100 },
+    );
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      return;
+    }
+
+    const circle = parsed.payload.shapes[0];
+    expect(circle.type).toBe('circle');
+    if (circle.type === 'circle') {
+      expect(circle.cx).toBe(50);
+      expect(circle.cy).toBe(80);
+      expect(circle.radius).toBeCloseTo(20, 6);
+      expect(circle.strokeWidth).toBeCloseTo(2, 6);
+    }
+  });
+
   it('imports Konva ellipse without scale attributes as unscaled radii', () => {
     const pictureId = 'pic-1';
     const konvaPayload = {
@@ -315,7 +474,7 @@ describe('annotations-json', () => {
       expect(oval.y).toBe(65);
       expect(oval.width).toBe(20);
       expect(oval.height).toBe(10);
-      expect(oval.rotationDeg).toBe(0);
+      expect(oval.rotationDeg).toBeCloseTo(0, 6);
       expect(oval.strokeWidth).toBe(2);
     }
   });
@@ -357,12 +516,15 @@ describe('annotations-json', () => {
     expect(triangle.type).toBe('triangle');
     if (triangle.type === 'triangle') {
       // After scale->rotate transform and y-axis conversion, apex is the highest-lat vertex.
-      expect(triangle.points[0].x).toBeCloseTo(58.660254, 6);
-      expect(triangle.points[0].y).toBeCloseTo(120, 6);
+      expect(triangle.points[0].x).toBeCloseTo(45, 6);
+      expect(triangle.points[0].y).toBeCloseTo(74.6410162, 6);
       expect(triangle.points[1].x).toBeCloseTo(60, 6);
-      expect(triangle.points[1].y).toBeCloseTo(65.3589838, 6);
-      expect(triangle.points[2].x).toBeCloseTo(40, 6);
-      expect(triangle.points[2].y).toBeCloseTo(74.0192379, 6);
+      expect(triangle.points[1].y).toBeCloseTo(40, 6);
+      expect(triangle.points[2].x).toBeCloseTo(45, 6);
+      expect(triangle.points[2].y).toBeCloseTo(5.3589838, 6);
+
+      expect(triangle.points[0].y).toBeGreaterThan(triangle.points[1].y);
+      expect(triangle.points[1].x).toBeGreaterThanOrEqual(triangle.points[2].x);
     }
   });
 });

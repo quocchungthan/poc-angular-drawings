@@ -1,0 +1,51 @@
+:host {
+  position: absolute;
+  left: 0.65rem;
+  bottom: 0.65rem;
+  z-index: 905;
+  width: 220px;
+  height: 150px;
+  pointer-events: none;
+}
+
+.minimap-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 0.55rem;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.9);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.28);
+  background: rgba(15, 23, 42, 0.38);
+  pointer-events: none;
+}
+
+.minimap-container {
+  width: 100%;
+  height: 100%;
+}
+
+.minimap-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 500;
+}
+
+.mask-part {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.52);
+}
+
+.minimap-viewport {
+  position: absolute;
+  z-index: 510;
+  border: 2px solid #e2e8f0;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.45);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 700px) {
+  :host {
+    width: 170px;
+    height: 116px;
+  }
+}

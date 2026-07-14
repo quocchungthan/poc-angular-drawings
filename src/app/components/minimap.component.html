@@ -1,0 +1,20 @@
+<aside class="minimap-overlay" aria-label="Viewport minimap" aria-hidden="true" data-testid="minimap-overlay">
+  <div #minimapContainer class="minimap-container" data-testid="minimap-container"></div>
+  <div class="minimap-mask">
+    <div class="mask-part" [style.left.px]="0" [style.top.px]="0" [style.width.%]="100" [style.height.px]="viewportTop()"></div>
+    <div class="mask-part" [style.left.px]="0" [style.top.px]="viewportBottom()" [style.width.%]="100" [style.bottom.px]="0"></div>
+    <div class="mask-part" [style.left.px]="0" [style.top.px]="viewportTop()" [style.width.px]="viewportLeft()" [style.height.px]="viewportHeight()"></div>
+    <div class="mask-part" [style.left.px]="viewportRight()" [style.top.px]="viewportTop()" [style.right.px]="0" [style.height.px]="viewportHeight()"></div>
+  </div>
+
+  @if (viewportVisible()) {
+    <div
+      class="minimap-viewport"
+      data-testid="minimap-viewport"
+      [style.left.px]="viewportLeft()"
+      [style.top.px]="viewportTop()"
+      [style.width.px]="viewportWidth()"
+      [style.height.px]="viewportHeight()"
+    ></div>
+  }
+</aside>

@@ -38,62 +38,14 @@
 
     @if (state.mode() === 'edit' && state.editSubMode() === 'drawing-edit') {
       <div class="tool-group">
-        <button
-          type="button"
-          [class.active]="state.drawingTool() === 'select'"
-          (click)="setDrawingTool('select')"
-        >
-          Select
-        </button>
-        <button
-          type="button"
-          [class.active]="state.drawingTool() === 'line'"
-          (click)="setDrawingTool('line')"
-        >
-          Line
-        </button>
-        <button
-          type="button"
-          [class.active]="state.drawingTool() === 'dashed-line'"
-          (click)="setDrawingTool('dashed-line')"
-        >
-          Dashed
-        </button>
-        <button
-          type="button"
-          [class.active]="state.drawingTool() === 'rectangle'"
-          (click)="setDrawingTool('rectangle')"
-        >
-          Rectangle
-        </button>
-        <button
-          type="button"
-          [class.active]="state.drawingTool() === 'triangle'"
-          (click)="setDrawingTool('triangle')"
-        >
-          Triangle
-        </button>
-        <button
-          type="button"
-          [class.active]="state.drawingTool() === 'circle'"
-          (click)="setDrawingTool('circle')"
-        >
-          Circle
-        </button>
-        <button
-          type="button"
-          [class.active]="state.drawingTool() === 'oval'"
-          (click)="setDrawingTool('oval')"
-        >
-          Oval
-        </button>
-        <button
-          type="button"
-          [class.active]="state.drawingTool() === 'arrow'"
-          (click)="setDrawingTool('arrow')"
-        >
-          Arrow
-        </button>
+        <button type="button" [class.active]="state.drawingTool() === 'select'" (click)="setDrawingTool('select')">Select</button>
+        <button type="button" [class.active]="state.drawingTool() === 'line'" (click)="setDrawingTool('line')">Line</button>
+        <button type="button" [class.active]="state.drawingTool() === 'dashed-line'" (click)="setDrawingTool('dashed-line')">Dashed</button>
+        <button type="button" [class.active]="state.drawingTool() === 'rectangle'" (click)="setDrawingTool('rectangle')">Rectangle</button>
+        <button type="button" [class.active]="state.drawingTool() === 'triangle'" (click)="setDrawingTool('triangle')">Triangle</button>
+        <button type="button" [class.active]="state.drawingTool() === 'circle'" (click)="setDrawingTool('circle')">Circle</button>
+        <button type="button" [class.active]="state.drawingTool() === 'oval'" (click)="setDrawingTool('oval')">Oval</button>
+        <button type="button" [class.active]="state.drawingTool() === 'arrow'" (click)="setDrawingTool('arrow')">Arrow</button>
       </div>
 
       <div class="properties-group">
@@ -102,7 +54,7 @@
           <input
             type="color"
             [value]="state.selectedColor()"
-            (input)="state.setSelectedColor($event.target.value); updateSelectedShapeProperty('color', $event.target.value)"
+            (input)="onColorChanged($any($event.target).value)"
           />
         </label>
         <label>
@@ -121,38 +73,10 @@
         @if (state.drawingTool() === 'arrow') {
           <div class="arrow-direction-group">
             <label>Arrow Direction:</label>
-            <button
-              type="button"
-              [class.active]="state.arrowDirection() === 'up'"
-              title="Up"
-              (click)="state.setArrowDirection('up')"
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              [class.active]="state.arrowDirection() === 'down'"
-              title="Down"
-              (click)="state.setArrowDirection('down')"
-            >
-              ↓
-            </button>
-            <button
-              type="button"
-              [class.active]="state.arrowDirection() === 'left'"
-              title="Left"
-              (click)="state.setArrowDirection('left')"
-            >
-              ←
-            </button>
-            <button
-              type="button"
-              [class.active]="state.arrowDirection() === 'right'"
-              title="Right"
-              (click)="state.setArrowDirection('right')"
-            >
-              →
-            </button>
+            <button type="button" [class.active]="state.arrowDirection() === 'up'" title="Up" (click)="state.setArrowDirection('up')">↑</button>
+            <button type="button" [class.active]="state.arrowDirection() === 'down'" title="Down" (click)="state.setArrowDirection('down')">↓</button>
+            <button type="button" [class.active]="state.arrowDirection() === 'left'" title="Left" (click)="state.setArrowDirection('left')">←</button>
+            <button type="button" [class.active]="state.arrowDirection() === 'right'" title="Right" (click)="state.setArrowDirection('right')">→</button>
           </div>
         }
       </div>
@@ -171,9 +95,7 @@
       <button type="button" (click)="resetCurrentPicture()">Reset Current</button>
       <button type="button" (click)="exportCurrentPictureJson()">Export Current Picture JSON</button>
       <button type="button" (click)="openImportJsonPicker()">Import JSON</button>
-      <button type="button" [class.active]="showChecklist" (click)="toggleChecklist()">
-        Demo Checklist
-      </button>
+      <button type="button" [class.active]="showChecklist" (click)="toggleChecklist()">Demo Checklist</button>
     </div>
 
     <input
@@ -190,28 +112,28 @@
     (touchstart)="onTouchStart($event)"
     (touchend)="onTouchEnd($event)"
   >
-    <div #mapContainer class="map-container" data-testid="map-container"></div>
+    <app-map-canvas
+      [pictureUrl]="state.currentPicture().url"
+      [pictureId]="state.currentPicture().id"
+      [pictureName]="state.currentPicture().name"
+      [mode]="state.mode()"
+      [editSubMode]="state.editSubMode()"
+      [drawingTool]="state.drawingTool()"
+      [selectedColor]="state.selectedColor()"
+      [selectedThickness]="state.selectedThickness()"
+      (statusMessageChange)="onMapStatusChanged($event)"
+      (selectionChange)="onMapSelectionChanged($event)"
+      (contextMenuStateChange)="onCanvasContextMenuChanged($event)"
+      (pictureLoaded)="onPictureLoaded($event)"
+      (mainViewBoundsChange)="onMainViewBoundsChanged($event)"
+    ></app-map-canvas>
 
-    <aside class="minimap-overlay" aria-label="Viewport minimap" aria-hidden="true" data-testid="minimap-overlay">
-      <div #minimapContainer class="minimap-container" data-testid="minimap-container"></div>
-      <div class="minimap-mask">
-        <div class="mask-part" [style.left.px]="0" [style.top.px]="0" [style.width.%]="100" [style.height.px]="minimapViewportTop"></div>
-        <div class="mask-part" [style.left.px]="0" [style.top.px]="minimapViewportBottom" [style.width.%]="100" [style.bottom.px]="0"></div>
-        <div class="mask-part" [style.left.px]="0" [style.top.px]="minimapViewportTop" [style.width.px]="minimapViewportLeft" [style.height.px]="minimapViewportHeight"></div>
-        <div class="mask-part" [style.left.px]="minimapViewportRight" [style.top.px]="minimapViewportTop" [style.right.px]="0" [style.height.px]="minimapViewportHeight"></div>
-      </div>
-
-      @if (minimapViewportVisible) {
-        <div
-          class="minimap-viewport"
-          data-testid="minimap-viewport"
-          [style.left.px]="minimapViewportLeft"
-          [style.top.px]="minimapViewportTop"
-          [style.width.px]="minimapViewportWidth"
-          [style.height.px]="minimapViewportHeight"
-        ></div>
-      }
-    </aside>
+    <app-minimap
+      [pictureUrl]="minimapPictureUrl()"
+      [pictureBounds]="minimapPictureBounds()"
+      [mainViewBounds]="minimapMainViewBounds()"
+      (viewportStateChange)="onMinimapViewportChanged($event)"
+    ></app-minimap>
 
     @if (contextMenuVisible && contextWaypoint) {
       <div
